@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+// Prisma schema for FitStream
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Seeded from users_data.csv ───────────────────────────────────────────────
+
+model User {
+  userId           String   @id @map("user_id")
+  firstName        String   @map("first_name")
+  lastName         String   @map("last_name")
+  age              Int
+  gender           String
+  birthdate        DateTime
+  signUpDate       DateTime @map("sign_up_date")
+  userLocation     String   @map("user_location")
+  subscriptionPlan String   @map("subscription_plan")
+
+  checkinEvents CheckinEvent[]
+
+  @@map("users")
+}
+
+// ─── Seeded from gym_locations_data.csv ───────────────────────────────────────
+
+model Gym {
+  gymId      String @id @map("gym_id")
+  location   String
+  gymType    String @map("gym_type")  // Premium | Standard | Budget
+  facilities String[]                 // e.g. ["Swimming Pool", "Sauna"]
+
+  checkinEvents CheckinEvent[]
+  gymStats      GymStat[]
+
+  @@map("gyms")
+}
+
+// ─── Seeded from subscription_plans.csv ───────────────────────────────────────
+
+model SubscriptionPlan {
+  plan           String   @id
+  pricePerMonth  Float    @map("price_per_month")
+  features       String[]
+
+  @@map("subscription_plans")
+}
+
+// ─── Written by Consumer Group 2 (stats-aggregator) ──────────────────────────
+// Aggregated per gym per hour — updated on every checkin event consumed
+
+model GymStat {
+  id              Int      @id @default(autoincrement())
+  gymId           String   @map("gym_id")
+  windowStart     DateTime @map("window_start") // truncated to hour
+  workoutType     String   @map("workout_type")
+  checkinCount    Int      @default(0) @map("checkin_count")
+  avgDurationMins Float    @default(0) @map("avg_duration_mins")
+  avgCalories     Float    @default(0) @map("avg_calories")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  gym Gym @relation(fields: [gymId], references: [gymId])
+
+  @@unique([gymId, windowStart, workoutType])
+  @@index([gymId, windowStart])
+  @@map("gym_stats")
+}
+
+// ─── Raw event log — written by Consumer Group 1 as audit trail ───────────────
+
+model CheckinEvent {
+  id            Int      @id @default(autoincrement())
+  userId        String   @map("user_id")
+  gymId         String   @map("gym_id")
+  checkinTime   DateTime @map("checkin_time")
+  checkoutTime  DateTime @map("checkout_time")
+  workoutType   String   @map("workout_type")
+  caloriesBurned Float   @map("calories_burned")
+  durationMins  Float    @map("duration_mins")
+  processedAt   DateTime @default(now()) @map("processed_at")
+
+  user User @relation(fields: [userId], references: [userId])
+  gym  Gym  @relation(fields: [gymId], references: [gymId])
+
+  @@index([userId, checkinTime])
+  @@index([gymId, checkinTime])
+  @@map("checkin_events")
+}
+
